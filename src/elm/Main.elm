@@ -4,10 +4,14 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Dict exposing (Dict)
-import Debug
 
 
 port generationRequest : List Int -> Cmd msg
+
+
+generate : Model -> Cmd Msg
+generate model =
+    generationRequest (List.map (\p -> p.id) model.people)
 
 
 port generationResponse : (List Int -> msg) -> Sub msg
@@ -23,7 +27,7 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( (Model [ Person "Florian" 1, Person "Jochen" 2, Person "Korneel" 3 ] Dict.empty ""), Cmd.none )
+    ( (Model [] Dict.empty ""), Cmd.none )
 
 
 type Msg
@@ -40,6 +44,7 @@ view model =
         [ createForm model.newPerson
         , createPeopleTable model.people
         , createGenerateButton model.people
+        , createResultTable model
         ]
 
 
@@ -98,7 +103,52 @@ createGenerateButton people =
             else
                 ""
     in
-        button [ class ("button is-primary is-large " ++ disabledClass), onClick Generate ] [ text "Genereer" ]
+        button [ class ("button is-primary is-large " ++ disabledClass), onClick Generate, id "generate" ] [ text "Genereer" ]
+
+
+createResultTable : Model -> Html Msg
+createResultTable model =
+    let
+        resultList =
+            Dict.toList model.result
+
+        createRow =
+            createResultRow model
+    in
+        table [ class "table is-striped" ]
+            [ thead []
+                [ tr []
+                    [ th [] [ text "Resultaat" ]
+                    , th [] []
+                    , th [] []
+                    ]
+                ]
+            , tbody [] (resultList |> List.map createRow)
+            ]
+
+
+createResultRow : Model -> ( Int, Int ) -> Html Msg
+createResultRow model ( id, for ) =
+    let
+        subject =
+            getNameById model id
+
+        target =
+            getNameById model for
+    in
+        tr []
+            [ td [] [ text subject ]
+            , td [] [ text "koopt voor" ]
+            , td [] [ text target ]
+            ]
+
+
+getNameById : Model -> Int -> String
+getNameById model id =
+    List.filter (\p -> p.id == id) model.people
+        |> List.head
+        |> Maybe.map (\p -> p.name)
+        |> Maybe.withDefault "???"
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -111,17 +161,22 @@ update msg model =
             addPerson model
 
         RemovePerson id ->
-            ( { model | people = (List.filter (\p -> p.id /= id) model.people) }, Cmd.none )
+            removePerson model id
 
         Generate ->
-            ( model, generationRequest (List.map (\p -> p.id) model.people) )
+            ( model, generate model )
 
         Result ids ->
-            let
-                foo =
-                    Debug.log "from JS" ids
-            in
-                ( model, Cmd.none )
+            processResult model ids
+
+
+removePerson : Model -> Int -> ( Model, Cmd Msg )
+removePerson model id =
+    let
+        nextModel =
+            { model | people = (List.filter (\p -> p.id /= id) model.people) }
+    in
+        ( nextModel, generate nextModel )
 
 
 addPerson : Model -> ( Model, Cmd Msg )
@@ -139,9 +194,16 @@ addPerson model =
         ( { model | people = nextPerson :: model.people, newPerson = "" }, Cmd.none )
 
 
-generateOrder : Model -> ( Model, Cmd Msg )
-generateOrder model =
-    ( model, Cmd.none )
+processResult : Model -> List Int -> ( Model, Cmd Msg )
+processResult model ids =
+    let
+        personIds =
+            List.map (\p -> p.id) model.people
+
+        merged =
+            List.map2 (,) personIds ids
+    in
+        ( { model | result = Dict.fromList merged }, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
