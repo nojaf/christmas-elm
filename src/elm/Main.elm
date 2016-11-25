@@ -176,7 +176,10 @@ removePerson model id =
         nextModel =
             { model | people = (List.filter (\p -> p.id /= id) model.people) }
     in
-        ( nextModel, generate nextModel )
+        if (List.length nextModel.people) > 1 then
+            ( nextModel, generate nextModel )
+        else
+            ( { nextModel | result = Dict.empty }, Cmd.none )
 
 
 addPerson : Model -> ( Model, Cmd Msg )
